@@ -1040,10 +1040,9 @@ def theory_shot_predict_llava(
         msgs.extend([
             {"role":"user",      "content":[{"type":"text","text":query_text}, {"type":"image","image":imgq}]},
         ])
-    print("before:", msgs)
 
     msgs, image_inputs = normalize_messages_for_model(msgs, model)
-    print("after:", msgs)
+
     text_input   = processor.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
     if not _is_llava16(model):
         image_inputs, _ = process_vision_info(msgs)

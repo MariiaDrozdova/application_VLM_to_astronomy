@@ -29,6 +29,8 @@ application_VLM_to_astronomy/
 
 ## Installation
 
+All experiments in the paper can be reproduced on a single GPU (we used an NVIDIA GeForce RTX 4090).
+
 ```bash
 # Python 3.10+ recommended
 # Create a new conda env
@@ -36,9 +38,7 @@ conda create -n vlm_astronomy python=3.10 -y
 conda activate vlm_astronomy
 
 # Install dependencies
-pip install -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 
-pip install -U transformers accelerate peft pillow datasets scikit-learn tenacity tqdm wandb
-pip install -U google-genai openai  # Gemini & GPT APIs
+pip install -r requirements.txt
 ```
 
 ### API keys (Gemini & GPT)
@@ -100,11 +100,12 @@ python evaluate_test.py \
 Uses `--fixed_indexes` (defaults provided in the script).
 ```bash
 python evaluate_test.py \
-  --sampling_regime few-shot \
+  --sampling_regime few-shot-fixed-neighbors \
   --index 0 \
   --model_id Qwen/Qwen2-VL-7B-Instruct \
   --fixed_indexes 105 102 3 100 \
-  --temperature 0
+  --temperature 0 \
+  --n_reps 1
 ```
 
 ### Few-shot — kNN retrieved exemplars
@@ -115,14 +116,16 @@ python evaluate_test.py \
   --sampling_regime few-shot-most-closest-neighbors \
   --index 1 \
   --model_id Qwen/Qwen2-VL-7B-Instruct \
-  --nearest_neighbors 5
+  --nearest_neighbors 5 \
+  --n_reps 1
 
 # Balanced (use an even k)
 python evaluate_test.py \
   --sampling_regime few-shot-balanced-closest-neighbors \
   --index 1 \
-  --model_id gemini-2.5-flash \
-  --nearest_neighbors 6
+  --model_id Qwen/Qwen2-VL-7B-Instruct \
+  --nearest_neighbors 6 \
+  --n_reps 1
 ```
 
 > Tips:
@@ -135,6 +138,11 @@ python evaluate_test.py \
 
 `train_sft.py` fine-tunes **~15M** LoRA parameters on MiraBest.  
 (Training prompt matches a zero-shot template to avoid train/test prompt mismatch.)
+
+We recommend installing flash attention for this part:
+```bash
+pip install -U flash-attn --no-build-isolation
+```
 
 **Minimal run (Qwen2-VL-7B)**
 ```bash
@@ -153,13 +161,6 @@ python train_sft.py \
 **Notes**
 - Checkpoints are written to a temporary `./ckpt_<RUNID>` during training.
 - By default, the script cleans up the checkpoint directory at the end (adjust if you want to persist).
-
----
-
-## Reproducing paper experiments
-
-- Use the **provided prompt indices** (`--index`) for each `--sampling_regime` to reproduce reported variants.  
-- The script already contains the **Text**, **Diagram**, **Fixed-Imgs**, **kNN-Imgs**, and **kNN-Balanced** templates and logic.
 
 ---
 

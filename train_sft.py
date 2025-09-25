@@ -70,7 +70,7 @@ def load_model(model_id):
     model = Qwen2VLForConditionalGeneration.from_pretrained(
         model_id,
         device_map=None,
-        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+        dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         attn_implementation="flash_attention_2",
     ).to(device)
     

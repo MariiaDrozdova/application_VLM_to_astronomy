@@ -83,7 +83,7 @@ def load_model(model_id):
         model = Qwen2VLForConditionalGeneration.from_pretrained(
             model_id,
             device_map=None,
-            torch_dtype=dtype,
+            dtype=dtype,
             # attn_implementation="flash_attention_2",
         ).to(device)
 
@@ -96,13 +96,13 @@ def load_model(model_id):
         try:
             from transformers.models.qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
             model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                model_id, torch_dtype=torch.bfloat16,
+                model_id, dtype=torch.bfloat16,
             ).to(device)
         except Exception:
             from transformers import AutoModelForCausalLM
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
-                torch_dtype=torch.bfloat16,
+                dtype=torch.bfloat16,
                 trust_remote_code=True,
             ).to(device)
         return model, processor
@@ -113,7 +113,7 @@ def load_model(model_id):
         processor = LlavaNextProcessor.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf")
 
         model = LlavaNextForConditionalGeneration.from_pretrained("llava-hf/llava-v1.6-mistral-7b-hf",
-                                                                  torch_dtype=torch.float16, low_cpu_mem_usage=True)
+                                                                  dtype=torch.float16, low_cpu_mem_usage=True)
         model.to(device)
     elif model_id == "HuggingFaceM4/idefics2-8b-chatty":
         from transformers import Idefics2ForConditionalGeneration, Idefics2Processor
@@ -121,7 +121,7 @@ def load_model(model_id):
         processor = Idefics2Processor.from_pretrained(model_id)
         model = Idefics2ForConditionalGeneration.from_pretrained(
             model_id,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
         ).to(device)
         return model, processor
 
@@ -134,7 +134,7 @@ def load_model(model_id):
         )
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
-            torch_dtype=torch.bfloat16,  # or float16 if you prefer
+            dtype=torch.bfloat16,  # or float16 if you prefer
             device_map="auto",
             trust_remote_code=True
         )
@@ -147,7 +147,7 @@ def load_model(model_id):
         processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
         model = AutoModel.from_pretrained(
             model_id,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             trust_remote_code=True
         ).to(device)
         return model, processor
@@ -158,7 +158,7 @@ def load_model(model_id):
         processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             trust_remote_code=True
         ).to(device)
         return model, processor
@@ -167,7 +167,7 @@ def load_model(model_id):
         from transformers import AutoProcessor, LlavaForConditionalGeneration
         model = LlavaForConditionalGeneration.from_pretrained(
             model_id,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             low_cpu_mem_usage=True,
         ).to(device)
 
@@ -178,7 +178,7 @@ def load_model(model_id):
         processor = AutoProcessor.from_pretrained(model_id)
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
-            torch_dtype="auto",
+            dtype="auto",
             device_map="auto"
         )
     elif model_id == "deepseek-ai/deepseek-vl2-tiny" or model_id == "deepseek-ai/deepseek-vl2-small":
@@ -191,7 +191,7 @@ def load_model(model_id):
         model_path = model_id
         model = DeepseekVLV2ForCausalLM.from_pretrained(
             model_path,
-            torch_dtype=torch.float16,
+            dtype=torch.float16,
             device_map="auto",
             trust_remote_code=True,
             low_cpu_mem_usage=True,
