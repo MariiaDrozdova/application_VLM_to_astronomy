@@ -91,7 +91,7 @@ python evaluate_test.py \
 python evaluate_test.py \
   --sampling_regime theory-shot \
   --index 0 \
-  --model_id gemini-2.5-flash \
+  --model_id Qwen/Qwen2-VL-7B-Instruct \
   --temperature 0 \
   --n_reps 1
 ```

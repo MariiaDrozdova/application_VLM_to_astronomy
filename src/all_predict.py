@@ -23,7 +23,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from qwen_vl_utils import process_vision_info
 from src.utils import extract_last_class
 
-
+DIAGRAM_PATH = "frcartoon.png"
 
 def PIL_to_bytes(image):
     buffer = BytesIO()
@@ -938,7 +938,7 @@ def theory_shot_predict_deepseek(
         imgq = imgq.convert("RGB")
     images = [imgq]
 
-    diagram_img = PIL.Image.open("../frcartoon.png").convert("RGB")
+    diagram_img = PIL.Image.open(diagram_path).convert("RGB")
     diagram_text = "<image><|ref|> First image. This is the diagram showing the patterns of FR-I and FR-II classes. <|/ref|>\n"
     images.insert(0, diagram_img)
 
@@ -1027,7 +1027,7 @@ def theory_shot_predict_llava(
         all_labels=["FR-I","FR-II",],
     ):
     imgq = test_dataset[query_idx]["image"]
-    cartoon_img = PIL.Image.open("../frcartoon.png")
+    cartoon_img = PIL.Image.open(DIAGRAM_PATH)
 
     msgs = [
         {"role":"system",    "content":[{"type":"image", "image":cartoon_img},{"type":"text","text":system_message}]},
@@ -1112,7 +1112,7 @@ def theory_shot_predict_gemini(
     imgq = test_dataset[query_idx]["image"]
     imgq_bytes = PIL_to_bytes(imgq)
 
-    cartoon_img = PIL.Image.open("../frcartoon.png")
+    cartoon_img = PIL.Image.open(DIAGRAM_PATH)
     cartoon_bytes = PIL_to_bytes(cartoon_img)
 
     if image_first:
@@ -1251,7 +1251,7 @@ def theory_shot_predict_openai(
     imgq = test_dataset[query_idx]["image"]
     base64_imgq = PIL_to_base64(imgq)
 
-    cartoon_img = PIL.Image.open("../frcartoon.png")
+    cartoon_img = PIL.Image.open(DIAGRAM_PATH)
     base64_cartoon = PIL_to_base64(cartoon_img)
         
     messages = [
