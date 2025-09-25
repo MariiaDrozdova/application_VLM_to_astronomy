@@ -1,0 +1,16 @@
+torch
+torchvision
+torchaudio
+transformers
+accelerate
+peft
+datasets
+scikit-learn
+pillow
+tqdm
+tenacity
+wandb
+openai
+google-genai
+sentence-transformers
+qwen_vl_utils
