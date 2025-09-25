@@ -31,6 +31,11 @@ application_VLM_to_astronomy/
 
 ```bash
 # Python 3.10+ recommended
+# Create a new conda env
+conda create -n vlm_astronomy python=3.10 -y
+conda activate vlm_astronomy
+
+# Install dependencies
 pip install -U torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 
 pip install -U transformers accelerate peft pillow datasets scikit-learn tenacity tqdm wandb
 pip install -U google-genai openai  # Gemini & GPT APIs

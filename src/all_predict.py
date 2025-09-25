@@ -110,6 +110,7 @@ def zero_shot_predict_openai(
         max_new_tokens=512,
         print_text=False,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     assert system_message != "" and query_text != ""
     
@@ -171,7 +172,7 @@ def zero_shot_predict_openai(
         if print_text:
             print(f"Candidate #{i} raw output:\n{raw}\n{'—'*20}")
 
-        cls = extract_last_class(raw)
+        cls = extract_last_class(raw, all_labels)
         answers[cls] += 1
 
     try:
@@ -200,6 +201,7 @@ def zero_shot_predict_deepseek(
         summary_after_examples_text="",
         max_new_tokens=512,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     assert system_message != "" and query_text != ""
     
@@ -263,7 +265,7 @@ def zero_shot_predict_deepseek(
             print("Answer:")
             print(raw) 
 
-        answer = extract_last_class(raw)
+        answer = extract_last_class(raw, all_labels)
         answers[answer] += 1
     if print_text:
         print(answers)
@@ -290,6 +292,7 @@ def zero_shot_predict_llava(
         summary_after_examples_text="",
         max_new_tokens=512,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     imgq = test_dataset[query_idx]["image"]
         
@@ -340,7 +343,7 @@ def zero_shot_predict_llava(
             print("Answer:")
             print(raw) 
         raw_answers.append(raw)
-        answer = extract_last_class(raw)
+        answer = extract_last_class(raw, all_labels)
         answers[answer]+=1
     if print_text:
         print(answers)
@@ -369,6 +372,7 @@ def zero_shot_predict_gemini(
         summary_after_examples_text="",
         max_new_tokens=2048,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     assert system_message != "" and query_text != ""
     imgq = test_dataset[query_idx]["image"]
@@ -410,7 +414,7 @@ def zero_shot_predict_gemini(
         if print_text:
             print(f"Candidate #{i} raw output:\n{raw}\n{'—'*20}")
     
-        cls = extract_last_class(raw)
+        cls = extract_last_class(raw, all_labels)
         answers[cls] += 1
     if print_text:
         print(answer)
@@ -443,6 +447,7 @@ def few_shot_predict_deepseek(
         summary_after_examples_text="",
         max_new_tokens=512,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     assert system_message != "" and query_text != ""
     
@@ -513,7 +518,7 @@ def few_shot_predict_deepseek(
             print("Answer:")
             print(raw) 
 
-        answer = extract_last_class(raw)
+        answer = extract_last_class(raw, all_labels)
         answers[answer] += 1
     if print_text:
         print(answers)
@@ -601,7 +606,7 @@ def few_shot_predict_llava(
         summary_after_examples_text="",
         max_new_tokens=512,
         image_first=False,
-    
+        all_labels=["FR-I","FR-II",],
     ):
     assert system_message != "" and query_text != ""
     imgq = test_dataset[query_idx]["image"]
@@ -687,7 +692,7 @@ def few_shot_predict_llava(
             print("Answer:")
             print(raw) 
         raw_answers.append(raw)
-        answer = extract_last_class(raw)
+        answer = extract_last_class(raw, all_labels)
         answers[answer]+=1
     if print_text:
         print(answers)
@@ -715,7 +720,8 @@ def few_shot_predict_gemini(
         query_text="",
         summary_after_examples_text="",
         max_new_tokens=512,
-        image_first=False
+        image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     assert system_message != "" and query_text != ""
     imgq = test_dataset[query_idx]["image"]
@@ -786,7 +792,7 @@ def few_shot_predict_gemini(
         if print_text:
             print(f"Candidate #{i} raw output:\n{raw}\n{'—'*20}")
     
-        cls = extract_last_class(raw)
+        cls = extract_last_class(raw, all_labels)
         answers[cls] += 1
     if print_text:
         print(raw_answers)
@@ -819,6 +825,7 @@ def few_shot_predict_openai(
         summary_after_examples_text="",
         max_new_tokens=512,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     assert system_message != "" and query_text != ""
 
@@ -895,7 +902,7 @@ def few_shot_predict_openai(
         if print_text:
             print(f"Candidate #{i} raw output:\n{raw}\n{'—'*20}")
 
-        cls = extract_last_class(raw)
+        cls = extract_last_class(raw, all_labels)
         answers[cls] += 1
 
     try:
@@ -924,6 +931,7 @@ def theory_shot_predict_deepseek(
         summary_after_examples_text="",
         max_new_tokens=512,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     imgq = test_dataset[query_idx]["image"]
     if imgq.mode != "RGB":
@@ -989,7 +997,7 @@ def theory_shot_predict_deepseek(
             print("Answer:")
             print(raw) 
 
-        answer = extract_last_class(raw)
+        answer = extract_last_class(raw, all_labels)
         answers[answer] += 1
     if print_text:
         print(answers)
@@ -1016,6 +1024,7 @@ def theory_shot_predict_llava(
         summary_after_examples_text="",
         max_new_tokens=512,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     imgq = test_dataset[query_idx]["image"]
     cartoon_img = PIL.Image.open("../frcartoon.png")
@@ -1069,7 +1078,7 @@ def theory_shot_predict_llava(
             print("Answer:")
             print(raw) 
         raw_answers.append(raw)
-        answer = extract_last_class(raw)
+        answer = extract_last_class(raw, all_labels)
         answers[answer]+=1
     if print_text:
         print(answers)
@@ -1098,6 +1107,7 @@ def theory_shot_predict_gemini(
         summary_after_examples_text="",
         max_new_tokens=512,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     imgq = test_dataset[query_idx]["image"]
     imgq_bytes = PIL_to_bytes(imgq)
@@ -1145,7 +1155,7 @@ def theory_shot_predict_gemini(
         if print_text:
             print(f"Candidate #{i} raw output:\n{raw}\n{'—'*20}")
     
-        cls = extract_last_class(raw)
+        cls = extract_last_class(raw, all_labels)
         answers[cls] += 1
     if print_text:
         print(answer)
@@ -1234,6 +1244,7 @@ def theory_shot_predict_openai(
         summary_after_examples_text="",
         max_new_tokens=512,
         image_first=False,
+        all_labels=["FR-I","FR-II",],
     ):
     assert system_message != "" and query_text != ""
 
@@ -1284,7 +1295,7 @@ def theory_shot_predict_openai(
         if print_text:
             print(f"Candidate #{i} raw output:\n{raw}\n{'—'*20}")
 
-        cls = extract_last_class(raw)
+        cls = extract_last_class(raw, all_labels)
         answers[cls] += 1
 
     try:
