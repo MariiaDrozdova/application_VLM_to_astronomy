@@ -48,14 +48,14 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--lora_r", type=int, default=8)
     parser.add_argument("--lora_alpha", type=int, default=32)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=55)
     parser.add_argument("--num_workers", type=int, default=1)
 
     parser.add_argument("--lora_dropout", type=float, default=0.3)
-    parser.add_argument("--lr", type=float, default=5e-5)
+    parser.add_argument("--lr", type=float, default=1e-4)
     return parser.parse_args()
 
-def set_seed(seed: int = 42):
+def set_seed(seed: int = 55):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -370,7 +370,8 @@ if use_wandb:
             "train_system_message": train_system_message,
             "train_query_text": train_query_text,
             "lr_schedule": lr_schedule,
-            "dataset_name" : dataset_name
+            "dataset_name" : dataset_name,
+            "seed":seed
         }
     )
 
