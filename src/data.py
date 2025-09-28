@@ -87,7 +87,8 @@ def _gen_gmnist(ds):
             "human_or_machine": ""
         }
 
-def load_gmnist_data(root):
+def load_gmnist_data(root="./data"):
+    from galaxy_mnist import GalaxyMNIST
     train_raw = GalaxyMNIST(
         root=root,
         download=False,
