@@ -20,7 +20,9 @@ from transformers import (
 from peft import (
     LoraConfig,
     get_peft_model,
+    PeftModel
 )
+from torch.utils.data import random_split
 
 from src.data import (
     load_gmnist_data,
@@ -29,6 +31,10 @@ from src.data import (
 )
 from qwen_vl_utils import process_vision_info
 from src.utils import extract_last_class, report_results
+
+
+from accelerate import Accelerator
+
 def parse_args():
     parser = argparse.ArgumentParser(description="VLM SFT training")
 
@@ -41,6 +47,7 @@ def parse_args():
     parser.add_argument("--lr_schedule", type=str, default="linear", choices=["linear","cosine","constant"])
     parser.add_argument("--dataset_name", type=str, default="mirabest",
                         choices=["mirabest", "gmnist", "radiogalaxynetdataset"])
+    parser.add_argument("--ckpt_dir", type=str, default=None)
 
     parser.add_argument("--val_size", type=int, default=70)
     parser.add_argument("--train_size", type=int, default=656)
@@ -50,9 +57,13 @@ def parse_args():
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--seed", type=int, default=55)
     parser.add_argument("--num_workers", type=int, default=1)
+    parser.add_argument("--processor_min_pixels", type=int, default=224*224)
+    parser.add_argument("--processor_max_pixels", type=int, default=2048*2048)
+
 
     parser.add_argument("--lora_dropout", type=float, default=0.3)
     parser.add_argument("--lr", type=float, default=1e-4)
+
     return parser.parse_args()
 
 def set_seed(seed: int = 55):
@@ -63,16 +74,13 @@ def set_seed(seed: int = 55):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-def load_model(model_id):
-    min_pixels = 224*224
-    max_pixels = 2048*2048
-
+def load_model(model_id, min_pixels=224*224, max_pixels=2048*2048):
     model = Qwen2VLForConditionalGeneration.from_pretrained(
         model_id,
-        device_map=None,
+        device_map="auto",
         dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         attn_implementation="flash_attention_2",
-    ).to(device)
+    )
     
     processor = Qwen2VLProcessor.from_pretrained(model_id, min_pixels=min_pixels, max_pixels=max_pixels)
     processor.tokenizer.padding_side = "left"
@@ -111,7 +119,7 @@ def zero_shot_predict(
         print("Prompt:")
         print(text_input)
 
-    inputs = processor(text=[text_input], images=image_inputs, return_tensors="pt").to(device)
+    inputs = processor(text=[text_input], images=image_inputs, return_tensors="pt").to(model.device)
 
     answers = Counter()
     raw_answers = []
@@ -290,7 +298,8 @@ lr_schedule = args.lr_schedule
 dataset_name = args.dataset_name
 seed = args.seed
 num_workers = args.num_workers
-
+min_pixels = args.processor_min_pixels
+max_pixels = args.processor_max_pixels
 set_seed(seed)
 
 lora_layers = [
@@ -380,7 +389,8 @@ assert model_id in [
     "Qwen/Qwen2-VL-7B-Instruct",
 ]
 
-model, processor = load_model(model_id)
+accelerator = Accelerator(mixed_precision="bf16")
+model, processor = load_model(model_id, min_pixels=min_pixels, max_pixels=max_pixels)
 
 # Attach adapter
 train_dataset, test_dataset = load_mirabest_data()
@@ -390,19 +400,41 @@ if dataset_name == "gmnist":
     all_labels = ["edge_on_disk", "smooth_cigar", "smooth_round", "unbarred_spiral"]
 
 
-train_subset = train_dataset
+#train_subset = train_dataset
+n_totals = len(train_dataset)
+generator = torch.Generator().manual_seed(42)
+
+train_subset, val_subset = random_split(
+        train_dataset,
+        [train_size, n_totals-train_size],
+        generator=generator
+)
+
 if dataset_name == "radiogalaxynetdataset":
     train_subset, val_subset, test_dataset = load_radiogalaxynet_dataset()
     all_labels=["FR-I", "FR-II", "FR-X", "R",]
 
-model.to(device)
+#model.to(device)
 
 total_params = sum(p.numel() for p in model.parameters())
 trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 log.info(f"{trainable_params}/{total_params}")
 losses = []
 
-if part_to_train == "LoRA":
+if args.ckpt_dir is not None:
+    from peft import PeftModel
+
+    ckpt_dir = args.ckpt_dir
+
+    # Load the LoRA weights onto the base model
+    model = PeftModel.from_pretrained(model, ckpt_dir, device_map="auto")
+
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    log.info(f"Loaded LoRA from {ckpt_dir}  ->  {trainable_params}/{total_params}")
+
+
+elif part_to_train == "LoRA":
     lora_config = LoraConfig(
         task_type="CAUSAL_LM",
         inference_mode=False,
@@ -411,7 +443,8 @@ if part_to_train == "LoRA":
         lora_dropout=lora_dropout,
         target_modules=lora_layers,
     )
-    model = get_peft_model(model, lora_config).to(device)
+    #base_model = model
+    model = get_peft_model(model, lora_config)#.to(device)
         
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -517,7 +550,7 @@ else:
 
 RUN_ID = uuid.uuid4().hex[:8]
 CKPT_DIR = Path(f"./ckpt_{RUN_ID}")
-MILESTONE_EVERY = 10
+MILESTONE_EVERY = 1
 EPS = 1e-8
 
 best_train_loss = float("inf")
@@ -527,6 +560,10 @@ improved_since_last_milestone = False
 
 losses = []
 
+model, optimizer, train_loader, scheduler = accelerator.prepare(
+    model, optimizer, train_loader, scheduler
+)
+
 try:
     global_step = 0
     for epoch in range(0, epochs + 1):
@@ -535,7 +572,7 @@ try:
 
         for batch in tqdm(train_loader, desc=f"Train {epoch}/{epochs}"):
             optimizer.zero_grad()
-            batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
+            #batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
             out = model(
                 input_ids=batch['input_ids'],
                 attention_mask=batch['attention_mask'],
@@ -555,6 +592,7 @@ try:
             wandb.log({"epoch": epoch, "train_average_loss": train_average_loss})
         log.info(f"Epoch {epoch} Train Loss: {train_average_loss:.6f}")
 
+        # save a NEW-BEST checkpoint whenever train loss improves
         if train_average_loss + EPS < best_train_loss:
             best_train_loss = train_average_loss
             best_epoch = epoch
@@ -563,24 +601,52 @@ try:
             if CKPT_DIR.exists():
                 shutil.rmtree(CKPT_DIR, ignore_errors=True)
             CKPT_DIR.mkdir(parents=True, exist_ok=True)
-
             try:
                 model.save_pretrained(str(CKPT_DIR))
                 log.info(f"[epoch {epoch}] Saved new-best checkpoint -> {CKPT_DIR}")
             except Exception as e:
                 log.warning(f"Could not save checkpoint: {e}")
+        else:
+            print(train_average_loss, best_train_loss)
 
+        # milestone: if improved since last milestone, RELOAD the saved best and test-eval THAT
+        # milestone: if improved since last milestone, RELOAD the saved best and test-eval THAT
         if (epoch + 1) % MILESTONE_EVERY == 0:
             if improved_since_last_milestone:
-                model.eval()
-                with torch.no_grad():
-                    best_test_metrics = evaluate_score(
-                        model, processor, test_dataset, system_message, query_text
-                    )
-                if use_wandb and isinstance(best_test_metrics, dict):
-                    for k, v in best_test_metrics.items():
-                        wandb.log({"epoch": epoch, f"test_{k}": v})
-                log.info(f"[Test metrics @ epoch {epoch}] {best_test_metrics}")
+                try:
+                    eval_model = None  # guard for finally
+
+                    if isinstance(model, PeftModel):
+                        # 1) rebuild a fresh base model (no adapters)
+                        base_model, _ = load_model(model_id)  # returns (model, processor); we ignore processor
+                        # 2) attach the saved LoRA adapter from CKPT_DIR
+                        eval_model = PeftModel.from_pretrained(base_model, str(CKPT_DIR))
+                    else:
+                        # non-PEFT case: load the full snapshot directly
+                        eval_model = type(model).from_pretrained(str(CKPT_DIR))
+
+                    eval_model.to(device)
+                    eval_model.eval()
+
+                    with torch.no_grad():
+                        best_test_metrics = evaluate_score(
+                            eval_model, processor, test_dataset, system_message, query_text
+                        )
+
+                    if use_wandb and isinstance(best_test_metrics, dict):
+                        for k, v in best_test_metrics.items():
+                            wandb.log({"epoch": epoch, f"test_{k}": v})
+
+                    log.info(f"[Test metrics @ epoch {epoch} | reloaded best ckpt] {best_test_metrics}")
+
+                except Exception as e:
+                    log.exception(f"Failed to reload/evaluate best checkpoint from {CKPT_DIR}: {e}")
+                finally:
+                    if 'eval_model' in locals() and eval_model is not None:
+                        del eval_model
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+
                 improved_since_last_milestone = False
             else:
                 log.info(f"[epoch {epoch}] No new best since last milestone — skipping TEST eval.")
@@ -594,6 +660,7 @@ except KeyboardInterrupt:
 
 log.info(f"Best train loss {best_train_loss:.6f} at epoch {best_epoch}")
 
+# clean temp checkpoint (we kept only the latest best during the run)
 if CKPT_DIR.exists():
     shutil.rmtree(CKPT_DIR, ignore_errors=True)
     log.info("Deleted checkpoint directory to keep the run clean.")
@@ -602,3 +669,4 @@ losses = np.array(losses)
 log.info(losses)
 if use_wandb:
     wandb.finish()
+
