@@ -28,6 +28,7 @@ from src.data import (
     load_gmnist_data,
     load_mirabest_data,
     load_radiogalaxynet_dataset,
+    load_rgz_dataset
 )
 from qwen_vl_utils import process_vision_info
 from src.utils import extract_last_class, report_results
@@ -46,7 +47,7 @@ def parse_args():
     parser.add_argument("--part_to_train", type=str, default="LoRA")
     parser.add_argument("--lr_schedule", type=str, default="linear", choices=["linear","cosine","constant"])
     parser.add_argument("--dataset_name", type=str, default="mirabest",
-                        choices=["mirabest", "gmnist", "radiogalaxynetdataset"])
+                        choices=["mirabest", "gmnist", "radiogalaxynetdataset", "rgz"])
     parser.add_argument("--ckpt_dir", type=str, default=None)
 
     parser.add_argument("--val_size", type=int, default=70)
@@ -351,6 +352,30 @@ if dataset_name == "gmnist":
 
     query_text = "Respond only with one label: edge_on_disk, smooth_cigar, smooth_round, or unbarred_spiral."
 
+if dataset_name == "rgz":
+    system_message = (
+        "You are an expert galaxy morphologist working with 256×256 color cutouts from DESI Legacy Imaging Surveys "
+        "(Galaxy10 DECals). Classify each image into exactly one of the 10 categories below:\n"
+        "\n"
+        "- Disturbed: irregular, asymmetric structure; warped or disrupted morphology.\n"
+        "- Merging: clear signs of two or more galaxies interacting, tidal tails, or overlapping cores.\n"
+        "- Round_Smooth: symmetric, nearly circular elliptical/lenticular; smooth light distribution.\n"
+        "- In-between_Round_Smooth: smooth elliptical/lenticular, slightly elongated but not cigar-shaped.\n"
+        "- Cigar_Shaped_Smooth: smooth, elongated elliptical; lacks disk/spiral arms; thicker than edge-on disks.\n"
+        "- Barred_Spiral: spiral galaxy with a clear central bar across the bulge.\n"
+        "- Unbarred_Tight_Spiral: spiral galaxy with tightly wound, well-defined arms; no central bar.\n"
+        "- Unbarred_Loose_Spiral: spiral galaxy with open, loosely wound arms; no central bar.\n"
+        "- Edge-on_Without_Bulge: very thin, highly elongated disk seen edge-on; no prominent central bulge.\n"
+        "- Edge-on_With_Bulge: edge-on disk galaxy with a clear central bulge visible above the thin disk.\n"
+        "\n"
+        "Focus on shape (round vs elongated), smoothness vs presence of arms, bar features, winding of spirals, "
+        "and edge-on bulge visibility. Ignore stars, noise, and artifacts. Respond decisively with one label."
+    )
+    query_text = (
+        "Respond only with one of: Disturbed, Merging, Round_Smooth, In-between_Round_Smooth, "
+        "Cigar_Shaped_Smooth, Barred_Spiral, Unbarred_Tight_Spiral, Unbarred_Loose_Spiral, "
+        "Edge-on_Without_Bulge, Edge-on_With_Bulge."
+    )
 
 train_system_message = system_message
 train_query_text = query_text
@@ -398,6 +423,21 @@ all_labels = ["FR-I", "FR-II"]
 if dataset_name == "gmnist":
     train_dataset, test_dataset = load_gmnist_data()
     all_labels = ["edge_on_disk", "smooth_cigar", "smooth_round", "unbarred_spiral"]
+if dataset_name == "rgz":
+    train_dataset, test_dataset = load_rgz_dataset()
+    all_labels = [
+        "Disturbed",
+        "Merging",
+        "Round_Smooth",
+        "In-between_Round_Smooth",
+        "Cigar_Shaped_Smooth",
+        "Barred_Spiral",
+        "Unbarred_Tight_Spiral",
+        "Unbarred_Loose_Spiral",
+        "Edge-on_Without_Bulge",
+        "Edge-on_With_Bulge",
+    ]
+
 
 
 #train_subset = train_dataset
@@ -550,7 +590,7 @@ else:
 
 RUN_ID = uuid.uuid4().hex[:8]
 CKPT_DIR = Path(f"./ckpt_{RUN_ID}")
-MILESTONE_EVERY = 1
+MILESTONE_EVERY = epochs//10
 EPS = 1e-8
 
 best_train_loss = float("inf")

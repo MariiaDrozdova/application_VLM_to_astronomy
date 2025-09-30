@@ -10,6 +10,7 @@ from functools import partial
 
 #from galaxy_mnist import GalaxyMNIST
 from torchvision.transforms.functional import to_pil_image
+from datasets import load_dataset
 
 fr1_list = [0, 1, 2]
 fr2_list = [5, 6]
@@ -150,4 +151,26 @@ def load_radiogalaxynet_dataset(path="/home/drozdova/projects/fewshot_rag_mirabe
     test_dataset = load_radio_galaxy_dataset(path, "test")
     test_dataset = test_dataset.map(add_image_column)
     return train_dataset, val_dataset, test_dataset
+
+def load_rgz_dataset():
+    all_labels = [
+        "Disturbed",
+        "Merging",
+        "Round_Smooth",
+        "In-between_Round_Smooth",
+        "Cigar_Shaped_Smooth",
+        "Barred_Spiral",
+        "Unbarred_Tight_Spiral",
+        "Unbarred_Loose_Spiral",
+        "Edge-on_Without_Bulge",
+        "Edge-on_With_Bulge"
+    ]
+
+    id2label = {i: label for i, label in enumerate(all_labels)}
+
+    ds = load_dataset("matthieulel/galaxy10_decals")
+    print(ds["train"][0])
+    ds = ds.map(lambda x: {"label": id2label[x["label"]]})
+    print(ds["train"][0])
+    return ds["train"], ds["test"]
 
