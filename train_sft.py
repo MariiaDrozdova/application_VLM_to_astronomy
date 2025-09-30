@@ -75,10 +75,10 @@ def set_seed(seed: int = 55):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-def load_model(model_id, min_pixels=224*224, max_pixels=2048*2048):
+def load_model(model_id, min_pixels=224*224, max_pixels=2048*2048, device_map="auto"):
     model = Qwen2VLForConditionalGeneration.from_pretrained(
         model_id,
-        device_map="auto",
+        device_map=device_map,
         dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         attn_implementation="flash_attention_2",
     )
@@ -122,6 +122,7 @@ def zero_shot_predict(
 
     inputs = processor(text=[text_input], images=image_inputs, return_tensors="pt").to(model.device)
 
+    model = model.to(model.device)
     answers = Counter()
     raw_answers = []
     out_ids = model.generate(**inputs,
@@ -377,6 +378,7 @@ if dataset_name == "rgz":
         "Edge-on_Without_Bulge, Edge-on_With_Bulge."
     )
 
+#query_text=""
 train_system_message = system_message
 train_query_text = query_text
 examples_message, query_text_example, summary_after_examples_text = "", "", ""
@@ -521,12 +523,12 @@ elif part_to_train == "vision_only+lora":
     lora_config = LoraConfig(
         task_type="CAUSAL_LM",
         inference_mode=False,
-        r=8,
-        lora_alpha=32,
-        lora_dropout=0.3,
-        target_modules=["q_proj", "v_proj", ]
+        r=lora_r,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
+        target_modules=lora_layers
     )
-    model = get_peft_model(model, lora_config).to(device)
+    model = get_peft_model(model, lora_config)#.to(device)
 
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -552,6 +554,64 @@ elif part_to_train == "vision_only+lora":
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     log.info(f"Adding vision {trainable_params}/{total_params}")
+elif part_to_train == "lora_to_vision":
+    for p in model.parameters():
+        p.requires_grad = False
+
+    lora_config = LoraConfig(
+        task_type="CAUSAL_LM",
+        inference_mode=False,
+        r=lora_r,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
+        target_modules=lora_layers,  
+    )
+    model = get_peft_model(model, lora_config)#.to(device)
+
+    for p in model.parameters():
+        p.requires_grad = False
+
+    VISION_KEYS = (".visual.", ".vision_tower.", ".vision_model.", ".vision.")
+    def _is_lora_param(n: str) -> bool:
+        return ("lora_A" in n) or ("lora_B" in n) or ("lora_embedding_A" in n) or ("lora_embedding_B" in n)
+
+    for n, p in model.named_parameters():
+        if _is_lora_param(n) and any(k in n for k in VISION_KEYS):
+            p.requires_grad = True
+
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    log.info(f"LoRA -> vision only {trainable_params}/{total_params}")
+
+elif part_to_train == "lora_to_decoder":
+    for p in model.parameters():
+        p.requires_grad = False
+
+    lora_config = LoraConfig(
+        task_type="CAUSAL_LM",
+        inference_mode=False,
+        r=lora_r,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
+        target_modules=lora_layers,
+    )
+    model = get_peft_model(model, lora_config)#.to(device)
+
+    for p in model.parameters():
+        p.requires_grad = False
+
+    VISION_KEYS = (".visual.", ".vision_tower.", ".vision_model.", ".vision.")
+    def _is_lora_param(n: str) -> bool:
+        return ("lora_A" in n) or ("lora_B" in n) or ("lora_embedding_A" in n) or ("lora_embedding_B" in n)
+
+    for n, p in model.named_parameters():
+        in_vision = any(k in n for k in VISION_KEYS)
+        if _is_lora_param(n) and not in_vision:
+            p.requires_grad = True
+
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    log.info(f"LoRA -> decoder only {trainable_params}/{total_params}")
 
 total_params = sum(p.numel() for p in model.parameters())
 trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -632,7 +692,6 @@ try:
             wandb.log({"epoch": epoch, "train_average_loss": train_average_loss})
         log.info(f"Epoch {epoch} Train Loss: {train_average_loss:.6f}")
 
-        # save a NEW-BEST checkpoint whenever train loss improves
         if train_average_loss + EPS < best_train_loss:
             best_train_loss = train_average_loss
             best_epoch = epoch
@@ -649,23 +708,18 @@ try:
         else:
             print(train_average_loss, best_train_loss)
 
-        # milestone: if improved since last milestone, RELOAD the saved best and test-eval THAT
-        # milestone: if improved since last milestone, RELOAD the saved best and test-eval THAT
         if (epoch + 1) % MILESTONE_EVERY == 0:
             if improved_since_last_milestone:
                 try:
-                    eval_model = None  # guard for finally
+                    eval_model = None  
 
                     if isinstance(model, PeftModel):
-                        # 1) rebuild a fresh base model (no adapters)
-                        base_model, _ = load_model(model_id)  # returns (model, processor); we ignore processor
-                        # 2) attach the saved LoRA adapter from CKPT_DIR
+                        base_model, _ = load_model(model_id, device_map={"": 0})   # or device.index
                         eval_model = PeftModel.from_pretrained(base_model, str(CKPT_DIR))
                     else:
-                        # non-PEFT case: load the full snapshot directly
-                        eval_model = type(model).from_pretrained(str(CKPT_DIR))
+                        eval_model = type(model).from_pretrained(str(CKPT_DIR), device_map={"": 0})
 
-                    eval_model.to(device)
+                    #eval_model.to(device)
                     eval_model.eval()
 
                     with torch.no_grad():
@@ -700,7 +754,6 @@ except KeyboardInterrupt:
 
 log.info(f"Best train loss {best_train_loss:.6f} at epoch {best_epoch}")
 
-# clean temp checkpoint (we kept only the latest best during the run)
 if CKPT_DIR.exists():
     shutil.rmtree(CKPT_DIR, ignore_errors=True)
     log.info("Deleted checkpoint directory to keep the run clean.")
