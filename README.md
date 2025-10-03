@@ -80,7 +80,7 @@ Prompts are bundled inside and selected via `--index`.
 ```bash
 python evaluate_test.py \
   --sampling_regime zero-shot \
-  --index 0 \
+  --index 5 \
   --model_id Qwen/Qwen2-VL-7B-Instruct \
   --temperature 0 \
   --n_reps 1
@@ -90,7 +90,7 @@ python evaluate_test.py \
 ```bash
 python evaluate_test.py \
   --sampling_regime theory-shot \
-  --index 0 \
+  --index 5 \
   --model_id Qwen/Qwen2-VL-7B-Instruct \
   --temperature 0 \
   --n_reps 1
@@ -101,7 +101,7 @@ Uses `--fixed_indexes` (defaults provided in the script).
 ```bash
 python evaluate_test.py \
   --sampling_regime few-shot-fixed-neighbors \
-  --index 0 \
+  --index 3 \
   --model_id Qwen/Qwen2-VL-7B-Instruct \
   --fixed_indexes 105 102 3 100 \
   --temperature 0 \
@@ -139,7 +139,7 @@ python evaluate_test.py \
 `train_sft.py` fine-tunes **~15M** LoRA parameters on MiraBest.  
 (Training prompt matches a zero-shot template to avoid train/test prompt mismatch.)
 
-We recommend installing flash attention for this part:
+Please, install flash attention for this part:
 ```bash
 pip install -U flash-attn --no-build-isolation
 ```
